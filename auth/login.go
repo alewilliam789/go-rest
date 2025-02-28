@@ -15,7 +15,7 @@ type LoginAttempt struct {
 
 func Login(w http.ResponseWriter, req *http.Request) {
     if (req.Method != "POST") {
-      w.WriteHeader(http.StatusForbidden)
+      w.WriteHeader(http.StatusBadRequest)
     }
 
     var la LoginAttempt
@@ -24,8 +24,11 @@ func Login(w http.ResponseWriter, req *http.Request) {
     err := decoder.Decode(&la)
 
     if err != nil {
+      w.WriteHeader(http.StatusInternalServerError)
       panic(err)
     }
 
     fmt.Printf("Hello %s \n",la.User)
+
+    w.WriteHeader(http.StatusOK) 
 }
