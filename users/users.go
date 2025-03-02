@@ -1,15 +1,21 @@
 package users
 
 import (
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
-	//"time"
-  "encoding/json"
+
+	usersSql "github.com/alewilliam789/go-rest/db"
 )
 
 
 
 type User struct {
+  id int32 `json:"id,omitempty"`
   UserName string `json:"username"`
   PassWord string `json:"pass"`
   FirstName string `json:"firstname"`
@@ -19,7 +25,7 @@ type User struct {
   State string `json:"state"`
 }
 
-func decode_user(user *User, req *http.Request) error {
+func decodeUser(user *User, req *http.Request) error {
   decoder := json.NewDecoder(req.Body)
 
   err := decoder.Decode(user)
@@ -27,74 +33,160 @@ func decode_user(user *User, req *http.Request) error {
   return err
 }
 
-func create_user(w http.ResponseWriter, req *http.Request) {
+func encodeUser(user *User, w http.ResponseWriter) error {
+  encoder := json.NewEncoder(w)
 
-  var new_user User;
+  err := encoder.Encode(user)
 
-  err := decode_user(&new_user, req)
+  return err
+}
+
+func hashPass(user *User) error {
+  hasher := sha256.New()
+
+  _, err := hasher.Write([]byte(user.PassWord))
 
   if err != nil {
-    w.WriteHeader(http.StatusBadRequest)
+    return err
   }
 
-  // Check User in database
-  // userlist = db.select(user)
-  // if len(userlist) == 0 db.insert(user)
-  // else return http.StatusDuplicated
+  user.PassWord = string(hasher.Sum(nil))
+
+  return nil
+}
+
+func createUser(w http.ResponseWriter, req *http.Request, ctx context.Context, queries *usersSql.Queries) {
+
+  var newUser User;
+
+  jsonErr := decodeUser(&newUser, req)
+
+  if jsonErr != nil {
+    w.WriteHeader(http.StatusBadRequest)
+    log.Panic(jsonErr)
+  }
+
+  hashErr := hashPass(&newUser)
+
+  if hashErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Panic(hashErr)
+  }
+
+  newUserParams := usersSql.CreateUserParams {
+    Username: newUser.UserName,
+    Password: newUser.PassWord,
+    Firstname: sql.NullString{String: newUser.FirstName,Valid:true},
+    Lastname: sql.NullString{String: newUser.LastName, Valid:true},
+    Dob: sql.NullString{String: newUser.DOB, Valid:true},
+    City: sql.NullString{String: newUser.City, Valid:true},
+    State: sql.NullString{String: newUser.State, Valid:true},
+  }
+
+  _, sqlErr := queries.CreateUser(ctx, newUserParams)
+
   
-  fmt.Printf("The user: %s was created",new_user.UserName)
-}
-
-func update_user(w http.ResponseWriter, req *http.Request) {
-  var current_user User;
-  user_id := req.PathValue("id")
-
-  err := decode_user(&current_user, req)
-
-  if err != nil {
-    w.WriteHeader(http.StatusBadRequest)
+  if sqlErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(sqlErr)
   }
 
+  w.WriteHeader(http.StatusCreated)
+  w.Header().Set("Content-Type","application/json")
+  encodeErr := encodeUser(&newUser,w)
 
+  if encodeErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(encodeErr)
+  }
 
-  // Check User is in database
-  // userlist, err = db.select(user_id)
-  // if len(userlist) == 0 return http.StatusNotFound
-  // else update users (user_id, user_name, password, first_name, last_name, dob, city, state) VALUES()
-  // return status ok and the new user in the body
-
-  fmt.Printf("The user: %s was updated", current_user.UserName)
+  fmt.Printf("The user: %s was created",newUser.UserName)
 }
 
-func get_user(w http.ResponseWriter, req *http.Request) {
-  user_id := req.PathValue("id")
+func updateUser(w http.ResponseWriter, req *http.Request, ctx context.Context, queries *usersSql.Queries) {
+  var currentUser User;
+
+  jsonErr := decodeUser(&currentUser, req)
+
+  if jsonErr != nil {
+    w.WriteHeader(http.StatusBadRequest)
+    log.Fatal(jsonErr)
+  }
+
+  hashErr := hashPass(&currentUser)
+
+  if hashErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(hashErr)
+  }
+
+  updateUserParams := usersSql.UpdateUserParams{
+    ID: currentUser.id,
+    Password: currentUser.PassWord,
+    Firstname: sql.NullString{String: currentUser.FirstName, Valid:true},
+    Lastname: sql.NullString{String: currentUser.LastName, Valid:true},
+    Dob: sql.NullString{String: currentUser.DOB, Valid: true},
+    City: sql.NullString{String: currentUser.City, Valid: true},
+    State: sql.NullString{String: currentUser.State, Valid: true},
+  }
+
+  sqlErr := queries.UpdateUser(ctx,updateUserParams)
+
+  if sqlErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(sqlErr)
+  }
+
+  w.WriteHeader(http.StatusAccepted)
+  w.Header().Set("Content-Type","application/json")
+  encodeErr := encodeUser(&currentUser,w)
+
+  if encodeErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(encodeErr)
+  }
+
+  fmt.Printf("The user: %s was updated", currentUser.UserName)
+}
+
+func getUser(w http.ResponseWriter, req *http.Request, ctx context.Context, queries *usersSql.Queries) {
+  userId := req.PathValue("id")
 
   // Check user in the database
   // userlist = db.select(user_id)
   // if len(userlist) == 0 return http.StatusNotFound
   // else w.Write(userlist[0])
 
-  fmt.Printf("The user with id %s was gott", user_id)
+  fmt.Printf("The user with id %s was gott", userId)
 }
 
 
 
 
 
-func UserHandler(w http.ResponseWriter, req *http.Request) {
+func UserHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
   
+  ctx := context.Background()
+
+  queries := usersSql.New(db)
+
   switch req.Method {
     case "POST":
-      create_user(w,req)
+      createUser(w,req, ctx, queries)
     case "PUT":
-      update_user(w,req)
+      updateUser(w,req, ctx, queries)
   }
 }
 
-func UserIdHandler(w http.ResponseWriter, req *http.Request) {
+func UserIdHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
+
+  ctx := context.Background()
+
+  queries := usersSql.New(db)
+
   switch req.Method {
     case "GET":
-      get_user(w,req)
+      getUser(w,req, ctx, queries)
   }
 }
 
