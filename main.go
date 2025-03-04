@@ -10,12 +10,10 @@ import (
 	auth "github.com/alewilliam789/go-rest/auth"
 	users "github.com/alewilliam789/go-rest/users"
 	"github.com/go-sql-driver/mysql"
-  "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 )
 
-var db *sql.DB
-
-func setup_conn() {
+func setupConn() *sql.DB {
   cfg := mysql.Config{
     User: os.Getenv("DBUSER"),
     Passwd: os.Getenv("DBPASS"),
@@ -35,6 +33,8 @@ func setup_conn() {
   }
 
   fmt.Println("Connected")
+
+  return db
 }
 
 
@@ -46,20 +46,23 @@ func main() {
   }
 
 
- setup_conn()
- defer db.Close()
-
+  userDb := setupConn()
+  defer userDb.Close()
 
   http.HandleFunc("/login", func(w http.ResponseWriter ,r *http.Request) {
     auth.Login(w, r)
   })
   http.HandleFunc("/user",func(w http.ResponseWriter, r *http.Request) {
-    users.UserHandler(w,r,db)  
+    users.UserHandler(w,r,userDb)  
   })
   http.HandleFunc("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
-    users.UserIdHandler(w,r,db)
+    users.UserIdHandler(w,r,userDb)
   })
 
   fmt.Printf("Starting server on 8080 \n")
-  http.ListenAndServe(":8080",nil)
+  httpErr := http.ListenAndServe(":8080",nil)
+  
+  if httpErr != nil {
+    log.Fatal(httpErr)
+  }
 }
