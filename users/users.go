@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+  "strconv"
 
 	usersSql "github.com/alewilliam789/go-rest/db"
 )
@@ -15,9 +16,9 @@ import (
 
 
 type User struct {
-  id int32 `json:"id,omitempty"`
+  Id int32 `json:"id,omitempty"`
   UserName string `json:"username"`
-  PassWord string `json:"pass"`
+  PassWord string `json:"password"`
   FirstName string `json:"firstname"`
   LastName string `json:"lastname"`
   DOB string `json:"dob"`
@@ -25,11 +26,24 @@ type User struct {
   State string `json:"state"`
 }
 
+func (user *User) FromDB(newUser *usersSql.User) {
+  user.Id = newUser.UserID
+  user.UserName = newUser.UserName
+  user.PassWord = newUser.Password
+  user.FirstName = newUser.FirstName.String
+  user.LastName = newUser.LastName.String
+  user.DOB = newUser.Dob.String
+  user.City = newUser.City.String
+  user.State = newUser.State.String
+}
+
+
+
 func decodeUser(user *User, req *http.Request) error {
   decoder := json.NewDecoder(req.Body)
 
   err := decoder.Decode(user)
-  
+
   return err
 }
 
@@ -55,9 +69,12 @@ func hashPass(user *User) error {
   return nil
 }
 
-func createUser(w http.ResponseWriter, req *http.Request, ctx context.Context, queries *usersSql.Queries) {
+func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
 
   var newUser User;
+
+  ctx := context.Background()
+  defer ctx.Done()
 
   jsonErr := decodeUser(&newUser, req)
 
@@ -74,22 +91,31 @@ func createUser(w http.ResponseWriter, req *http.Request, ctx context.Context, q
   }
 
   newUserParams := usersSql.CreateUserParams {
-    Username: newUser.UserName,
+    UserName: newUser.UserName,
     Password: newUser.PassWord,
-    Firstname: sql.NullString{String: newUser.FirstName,Valid:true},
-    Lastname: sql.NullString{String: newUser.LastName, Valid:true},
+    FirstName: sql.NullString{String: newUser.FirstName,Valid:true},
+    LastName: sql.NullString{String: newUser.LastName, Valid:true},
     Dob: sql.NullString{String: newUser.DOB, Valid:true},
     City: sql.NullString{String: newUser.City, Valid:true},
     State: sql.NullString{String: newUser.State, Valid:true},
   }
 
-  _, sqlErr := queries.CreateUser(ctx, newUserParams)
+  result, sqlErr := queries.CreateUser(ctx, newUserParams)
 
   
   if sqlErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
     log.Fatal(sqlErr)
   }
+
+  new_id, idErr := result.LastInsertId()
+
+  if idErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(idErr)
+  }
+
+  newUser.Id = int32(new_id)
 
   w.WriteHeader(http.StatusCreated)
   w.Header().Set("Content-Type","application/json")
@@ -103,8 +129,10 @@ func createUser(w http.ResponseWriter, req *http.Request, ctx context.Context, q
   fmt.Printf("The user: %s was created",newUser.UserName)
 }
 
-func updateUser(w http.ResponseWriter, req *http.Request, ctx context.Context, queries *usersSql.Queries) {
+func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
   var currentUser User;
+  ctx := context.Background()
+  defer ctx.Done()
 
   jsonErr := decodeUser(&currentUser, req)
 
@@ -121,10 +149,10 @@ func updateUser(w http.ResponseWriter, req *http.Request, ctx context.Context, q
   }
 
   updateUserParams := usersSql.UpdateUserParams{
-    ID: currentUser.id,
+    UserID: currentUser.Id,
     Password: currentUser.PassWord,
-    Firstname: sql.NullString{String: currentUser.FirstName, Valid:true},
-    Lastname: sql.NullString{String: currentUser.LastName, Valid:true},
+    FirstName: sql.NullString{String: currentUser.FirstName, Valid:true},
+    LastName: sql.NullString{String: currentUser.LastName, Valid:true},
     Dob: sql.NullString{String: currentUser.DOB, Valid: true},
     City: sql.NullString{String: currentUser.City, Valid: true},
     State: sql.NullString{String: currentUser.State, Valid: true},
@@ -149,44 +177,81 @@ func updateUser(w http.ResponseWriter, req *http.Request, ctx context.Context, q
   fmt.Printf("The user: %s was updated", currentUser.UserName)
 }
 
-func getUser(w http.ResponseWriter, req *http.Request, ctx context.Context, queries *usersSql.Queries) {
-  userId := req.PathValue("id")
+func getUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
+  userId, convErr := strconv.ParseInt(req.PathValue("id"),10,32)
+  
+  ctx := context.Background()
+  defer ctx.Done()
 
-  // Check user in the database
-  // userlist = db.select(user_id)
-  // if len(userlist) == 0 return http.StatusNotFound
-  // else w.Write(userlist[0])
+  if convErr != nil {
+    w.WriteHeader(http.StatusBadRequest)
+    log.Fatal(convErr)
+  }
+  
+  foundUser, dbErr := queries.GetUser(ctx,int32(userId))
 
-  fmt.Printf("The user with id %s was gott", userId)
+  if dbErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(dbErr)
+  }
+
+  var currentUser User
+
+  currentUser.FromDB(&foundUser)
+
+  w.WriteHeader(http.StatusFound)
+  w.Header().Set("Content-Type", "application/json")
+  encodeErr := encodeUser(&currentUser, w)
+
+  if encodeErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(encodeErr)
+  }
+
+  fmt.Printf("The user with id %d was gott", userId)
 }
 
-
-
-
-
-func UserHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
+func deleteUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
+  userId, parseErr := strconv.ParseInt(req.PathValue("id"),10,32)
   
   ctx := context.Background()
 
+  if parseErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Fatal(parseErr)
+  }
+
+  sqlErr := queries.DeleteUser(ctx, int32(userId))
+  
+  if sqlErr != nil {
+    w.WriteHeader(http.StatusAccepted)
+    log.Fatal(sqlErr)
+  }
+  
+  fmt.Printf("The user with id %d was deleted",userId)
+}
+
+func UserHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
+  
   queries := usersSql.New(db)
 
   switch req.Method {
     case "POST":
-      createUser(w,req, ctx, queries)
+      createUser(w, req, queries)
     case "PUT":
-      updateUser(w,req, ctx, queries)
+      updateUser(w, req, queries)
   }
 }
 
 func UserIdHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 
-  ctx := context.Background()
-
   queries := usersSql.New(db)
 
   switch req.Method {
     case "GET":
-      getUser(w,req, ctx, queries)
+      getUser(w,req, queries)
+    case "DELETE":
+      deleteUser(w,req,queries)
   }
 }
 
