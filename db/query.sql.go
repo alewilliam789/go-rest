@@ -12,10 +12,10 @@ import (
 
 const createUser = `-- name: CreateUser :execresult
 INSERT INTO user (
-  username,
+  user_name,
   password,
-  firstname,
-  lastname,
+  first_name,
+  last_name,
   dob,
   city,
   state
@@ -25,10 +25,10 @@ INSERT INTO user (
 `
 
 type CreateUserParams struct {
-	Username  string
+	UserName  string
 	Password  string
-	Firstname sql.NullString
-	Lastname  sql.NullString
+	FirstName sql.NullString
+	LastName  sql.NullString
 	Dob       sql.NullString
 	City      sql.NullString
 	State     sql.NullString
@@ -36,40 +36,40 @@ type CreateUserParams struct {
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (sql.Result, error) {
 	return q.db.ExecContext(ctx, createUser,
-		arg.Username,
+		arg.UserName,
 		arg.Password,
-		arg.Firstname,
-		arg.Lastname,
+		arg.FirstName,
+		arg.LastName,
 		arg.Dob,
 		arg.City,
 		arg.State,
 	)
 }
 
-const deleteAuthor = `-- name: DeleteAuthor :exec
+const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM user
-WHERE id=?
+WHERE user_id=?
 `
 
-func (q *Queries) DeleteAuthor(ctx context.Context, id int32) error {
-	_, err := q.db.ExecContext(ctx, deleteAuthor, id)
+func (q *Queries) DeleteUser(ctx context.Context, userID int32) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, userID)
 	return err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, password, firstname, lastname, dob, city, state FROM user
-WHERE id = ? LIMIT 1
+SELECT user_id, user_name, password, first_name, last_name, dob, city, state FROM user
+WHERE user_id = ? LIMIT 1
 `
 
-func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, id)
+func (q *Queries) GetUser(ctx context.Context, userID int32) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUser, userID)
 	var i User
 	err := row.Scan(
-		&i.ID,
-		&i.Username,
+		&i.UserID,
+		&i.UserName,
 		&i.Password,
-		&i.Firstname,
-		&i.Lastname,
+		&i.FirstName,
+		&i.LastName,
 		&i.Dob,
 		&i.City,
 		&i.State,
@@ -79,29 +79,29 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 
 const updateUser = `-- name: UpdateUser :exec
 UPDATE user
-SET password=?, firstname=?,lastname=?,dob=?,city=?,state=?
-WHERE id = ?
+SET password=?, first_name=?,last_name=?,dob=?,city=?,state=?
+WHERE user_id = ?
 `
 
 type UpdateUserParams struct {
 	Password  string
-	Firstname sql.NullString
-	Lastname  sql.NullString
+	FirstName sql.NullString
+	LastName  sql.NullString
 	Dob       sql.NullString
 	City      sql.NullString
 	State     sql.NullString
-	ID        int32
+	UserID    int32
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 	_, err := q.db.ExecContext(ctx, updateUser,
 		arg.Password,
-		arg.Firstname,
-		arg.Lastname,
+		arg.FirstName,
+		arg.LastName,
 		arg.Dob,
 		arg.City,
 		arg.State,
-		arg.ID,
+		arg.UserID,
 	)
 	return err
 }

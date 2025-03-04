@@ -9,11 +9,11 @@ import (
 )
 
 type User struct {
-	ID        int32
-	Username  string
+	UserID    int32
+	UserName  string
 	Password  string
-	Firstname sql.NullString
-	Lastname  sql.NullString
+	FirstName sql.NullString
+	LastName  sql.NullString
 	Dob       sql.NullString
 	City      sql.NullString
 	State     sql.NullString

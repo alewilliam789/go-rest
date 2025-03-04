@@ -1,9 +1,9 @@
 CREATE TABLE user (
-  id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(100) NOT NULL UNIQUE,
+  user_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_name VARCHAR(100) NOT NULL UNIQUE,
   password VARCHAR(100) NOT NULL,
-  firstname VARCHAR(100),
-  lastname VARCHAR(100),
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
   dob VARCHAR(20),
   city VARCHAR(50), 
   state VARCHAR(2)
