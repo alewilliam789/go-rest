@@ -1,6 +1,7 @@
 package users
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -8,7 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-  "strconv"
+	"strconv"
 
 	usersSql "github.com/alewilliam789/go-rest/db"
 )
@@ -16,9 +17,9 @@ import (
 
 
 type User struct {
-  Id int32 `json:"id,omitempty"`
+  Id int32 `json:"id"`
   UserName string `json:"username"`
-  PassWord string `json:"password"`
+  PassWord []byte `json:"password"`
   FirstName string `json:"firstname"`
   LastName string `json:"lastname"`
   DOB string `json:"dob"`
@@ -37,6 +38,14 @@ func (user *User) FromDB(newUser *usersSql.User) {
   user.State = newUser.State.String
 }
 
+func (user *User) DeepEqual(otherUser *User) bool {
+  if bytes.Equal(user.PassWord, otherUser.PassWord) && user.Id == otherUser.Id && user.UserName == otherUser.UserName && user.FirstName == otherUser.FirstName && user.DOB == otherUser.DOB && user.City == otherUser.City && user.State == otherUser.State {
+    return true
+  }
+
+  return false
+}
+
 
 
 func decodeUser(user *User, req *http.Request) error {
@@ -44,6 +53,8 @@ func decodeUser(user *User, req *http.Request) error {
 
   err := decoder.Decode(user)
 
+  fmt.Print(user)
+  
   return err
 }
 
@@ -64,7 +75,7 @@ func hashPass(user *User) error {
     return err
   }
 
-  user.PassWord = string(hasher.Sum(nil))
+  user.PassWord = hasher.Sum(nil)
 
   return nil
 }
@@ -77,6 +88,7 @@ func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
   defer ctx.Done()
 
   jsonErr := decodeUser(&newUser, req)
+
 
   if jsonErr != nil {
     w.WriteHeader(http.StatusBadRequest)

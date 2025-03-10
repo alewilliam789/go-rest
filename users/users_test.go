@@ -1,6 +1,7 @@
 package users
 
 import (
+	// "bytes"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -22,7 +23,7 @@ func TestCreateUser(t *testing.T) {
 
   jimmy := User {
     UserName: "jimmy789",
-    PassWord: "BOO",
+    PassWord: []byte("BOO"),
     FirstName: "Jimmy",
     LastName: "Halpert",
     DOB: "02/23/1197",
@@ -42,6 +43,12 @@ func TestCreateUser(t *testing.T) {
     t.Fatal(reqErr)
   }
 
+  hashErr := hashPass(&jimmy)
+
+  if hashErr != nil {
+    t.Fatal(hashErr)
+  }
+
   var respUser User
 
   decodeErr := decodeResp(&respUser,resp)
@@ -52,9 +59,90 @@ func TestCreateUser(t *testing.T) {
 
   jimmy.Id = respUser.Id
 
-  if jimmy != respUser {
+  if !jimmy.DeepEqual(&respUser) {
     t.Fatal("Response doesn't match")
   }
+}
+
+// func TestUpdateUser(t *testing.T) {
+//   jimmy := User {
+//     UserName: "jimmy789",
+//     PassWord: []byte("HELLO"),
+//     FirstName: "Jimmy",
+//     LastName: "Halpert",
+//     DOB: "02/23/1997",
+//     City: "Los Angeles",
+//     State: "CA",
+//     Id: 2,
+//   }
+//   
+//   jimmyBytes, marshalErr := json.Marshal(jimmy)
+//
+//   if marshalErr != nil {
+//     t.Fatal(marshalErr)
+//   }
+//
+//   client := &http.Client{}
+//   
+//   req, reqErr := http.NewRequest(http.MethodPut, "http://localhost:8080/user",bytes.NewBuffer(jimmyBytes))
+//   
+//   if reqErr != nil {
+//     t.Fatal(reqErr)
+//   }
+//
+//   resp, respErr := client.Do(req)
+//
+//   fmt.Print(resp.Status)
+//
+//   if respErr != nil {
+//     t.Fatal(respErr)
+//   }
+//
+//   var returned_jimmy User;
+//
+//   decodeErr := decodeResp(&returned_jimmy, resp)
+//
+//   if decodeErr != nil {
+//     t.Fatal(decodeErr)
+//   }
+//
+//   if !jimmy.DeepEqual(&returned_jimmy) {
+//     t.Fatal("The user was not returned correctly")
+//   }
+//
+//   fmt.Print(returned_jimmy)
+// }
+
+func TestGetUser(t *testing.T) {
+  jimmy := User {
+    UserName: "jimmy789",
+    PassWord: []byte("BOO"),
+    FirstName: "Jimmy",
+    LastName: "Halpert",
+    DOB: "02/23/1197",
+    City: "Scranton",
+    State: "PA",
+  }
+
+  var gotUser User
+
+  resp, respErr := http.Get("http://localhost:8080/user/")
+
+  if respErr != nil {
+    t.Fatal(respErr) 
+  }
+
+  decodeErr := decodeResp(&gotUser, resp)
+
+  if decodeErr != nil {
+    t.Fatal(decodeErr)
+  }
+
+  if !jimmy.DeepEqual(&gotUser) {
+    t.Fatal("The users don't match")
+  }
+
+  fmt.Print(gotUser)
 }
 
 
