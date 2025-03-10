@@ -11,7 +11,7 @@ import (
 type User struct {
 	UserID    int32
 	UserName  string
-	Password  string
+	Password  []byte
 	FirstName sql.NullString
 	LastName  sql.NullString
 	Dob       sql.NullString

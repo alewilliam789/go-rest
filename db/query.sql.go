@@ -26,7 +26,7 @@ INSERT INTO user (
 
 type CreateUserParams struct {
 	UserName  string
-	Password  string
+	Password  []byte
 	FirstName sql.NullString
 	LastName  sql.NullString
 	Dob       sql.NullString
@@ -84,7 +84,7 @@ WHERE user_id = ?
 `
 
 type UpdateUserParams struct {
-	Password  string
+	Password  []byte
 	FirstName sql.NullString
 	LastName  sql.NullString
 	Dob       sql.NullString
