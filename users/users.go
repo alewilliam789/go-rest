@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
-
 	usersSql "github.com/alewilliam789/go-rest/db"
 )
 
@@ -39,7 +37,7 @@ func (user *User) FromDB(newUser *usersSql.User) {
 }
 
 func (user *User) DeepEqual(otherUser *User) bool {
-  if bytes.Equal(user.PassWord, otherUser.PassWord) && user.Id == otherUser.Id && user.UserName == otherUser.UserName && user.FirstName == otherUser.FirstName && user.DOB == otherUser.DOB && user.City == otherUser.City && user.State == otherUser.State {
+  if bytes.Equal(user.PassWord, otherUser.PassWord) && user.UserName == otherUser.UserName && user.FirstName == otherUser.FirstName && user.DOB == otherUser.DOB && user.City == otherUser.City && user.State == otherUser.State {
     return true
   }
 
@@ -53,8 +51,6 @@ func decodeUser(user *User, req *http.Request) error {
 
   err := decoder.Decode(user)
 
-  fmt.Print(user)
-  
   return err
 }
 
@@ -80,6 +76,23 @@ func hashPass(user *User) error {
   return nil
 }
 
+func checkUserExists(user *User,ctx context.Context, queries *usersSql.Queries) (bool, error){
+  foundUser, dbErr := queries.GetUser(ctx,user.UserName)
+
+  userFound := true
+
+  var checkUser User
+
+  checkUser.FromDB(&foundUser)
+
+  if dbErr == sql.ErrNoRows {
+    userFound = false
+    return userFound, nil
+  }
+  
+  return userFound, dbErr
+}
+
 func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
 
   var newUser User;
@@ -92,14 +105,30 @@ func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if jsonErr != nil {
     w.WriteHeader(http.StatusBadRequest)
-    log.Panic(jsonErr)
+    log.Print(jsonErr)
+    return
   }
 
   hashErr := hashPass(&newUser)
 
   if hashErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Panic(hashErr)
+    log.Print(hashErr)
+    return 
+  }
+
+  doesExist, checkErr := checkUserExists(&newUser, ctx, queries)
+  
+  if checkErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Print(checkErr)
+    return
+  }
+
+  if doesExist {
+    w.WriteHeader(http.StatusConflict)
+    fmt.Printf("The user with username %s already exists\n", newUser.UserName)
+    return
   }
 
   newUserParams := usersSql.CreateUserParams {
@@ -117,14 +146,16 @@ func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
   
   if sqlErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(sqlErr)
+    log.Print(sqlErr)
+    return
   }
 
   new_id, idErr := result.LastInsertId()
 
   if idErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(idErr)
+    log.Print(idErr)
+    return
   }
 
   newUser.Id = int32(new_id)
@@ -135,10 +166,11 @@ func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if encodeErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(encodeErr)
+    log.Print(encodeErr)
+    return
   }
 
-  fmt.Printf("The user: %s was created",newUser.UserName)
+  log.Printf("The user: %s was created\n",newUser.UserName)
 }
 
 func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
@@ -150,18 +182,34 @@ func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if jsonErr != nil {
     w.WriteHeader(http.StatusBadRequest)
-    log.Fatal(jsonErr)
+    log.Print(jsonErr)
+    return
   }
 
   hashErr := hashPass(&currentUser)
 
   if hashErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(hashErr)
+    log.Print(hashErr)
+    return
+  }
+
+  doesExist, checkErr := checkUserExists(&currentUser, ctx, queries)
+
+  if checkErr != nil {
+    w.WriteHeader(http.StatusInternalServerError)
+    log.Print(checkErr)
+    return
+  }
+
+  if !doesExist {
+    w.WriteHeader(http.StatusNotFound)
+    fmt.Printf("The user with username %s does not exist\n", currentUser.UserName)
+    return
   }
 
   updateUserParams := usersSql.UpdateUserParams{
-    UserID: currentUser.Id,
+    UserName: currentUser.UserName,
     Password: currentUser.PassWord,
     FirstName: sql.NullString{String: currentUser.FirstName, Valid:true},
     LastName: sql.NullString{String: currentUser.LastName, Valid:true},
@@ -174,7 +222,8 @@ func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if sqlErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(sqlErr)
+    log.Print(sqlErr)
+    return
   }
 
   w.WriteHeader(http.StatusAccepted)
@@ -183,28 +232,26 @@ func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if encodeErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(encodeErr)
+    log.Print(encodeErr)
+    return
   }
 
-  fmt.Printf("The user: %s was updated", currentUser.UserName)
+  fmt.Printf("The user: %s was updated\n", currentUser.UserName)
 }
 
 func getUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
-  userId, convErr := strconv.ParseInt(req.PathValue("id"),10,32)
+  username := req.PathValue("username")
   
   ctx := context.Background()
   defer ctx.Done()
 
-  if convErr != nil {
-    w.WriteHeader(http.StatusBadRequest)
-    log.Fatal(convErr)
-  }
   
-  foundUser, dbErr := queries.GetUser(ctx,int32(userId))
+  foundUser, dbErr := queries.GetUser(ctx,username)
 
   if dbErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(dbErr)
+    log.Print(dbErr)
+    return
   }
 
   var currentUser User
@@ -217,30 +264,27 @@ func getUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries
 
   if encodeErr != nil {
     w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(encodeErr)
+    log.Print(encodeErr)
+    return
   }
 
-  fmt.Printf("The user with id %d was gott", userId)
+  fmt.Printf("The user with username %s was got\n", username)
 }
 
 func deleteUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
-  userId, parseErr := strconv.ParseInt(req.PathValue("id"),10,32)
+  username := req.PathValue("username")
   
   ctx := context.Background()
 
-  if parseErr != nil {
-    w.WriteHeader(http.StatusInternalServerError)
-    log.Fatal(parseErr)
-  }
-
-  sqlErr := queries.DeleteUser(ctx, int32(userId))
+  sqlErr := queries.DeleteUser(ctx, username)
   
   if sqlErr != nil {
     w.WriteHeader(http.StatusAccepted)
-    log.Fatal(sqlErr)
+    log.Print(sqlErr)
+    return
   }
   
-  fmt.Printf("The user with id %d was deleted",userId)
+  fmt.Printf("The user with username %s was deleted\n",username)
 }
 
 func UserHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
@@ -255,7 +299,7 @@ func UserHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
   }
 }
 
-func UserIdHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
+func UserNameHandler(w http.ResponseWriter, req *http.Request, db *sql.DB) {
 
   queries := usersSql.New(db)
 

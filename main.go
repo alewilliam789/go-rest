@@ -55,8 +55,8 @@ func main() {
   http.HandleFunc("/user",func(w http.ResponseWriter, r *http.Request) {
     users.UserHandler(w,r,userDb)  
   })
-  http.HandleFunc("/user/{id}", func(w http.ResponseWriter, r *http.Request) {
-    users.UserIdHandler(w,r,userDb)
+  http.HandleFunc("/user/{username}", func(w http.ResponseWriter, r *http.Request) {
+    users.UserNameHandler(w,r,userDb)
   })
 
   fmt.Printf("Starting server on 8080 \n")
