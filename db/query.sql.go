@@ -48,21 +48,21 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (sql.Res
 
 const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM user
-WHERE user_id=?
+WHERE user_name=?
 `
 
-func (q *Queries) DeleteUser(ctx context.Context, userID int32) error {
-	_, err := q.db.ExecContext(ctx, deleteUser, userID)
+func (q *Queries) DeleteUser(ctx context.Context, userName string) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, userName)
 	return err
 }
 
 const getUser = `-- name: GetUser :one
 SELECT user_id, user_name, password, first_name, last_name, dob, city, state FROM user
-WHERE user_id = ? LIMIT 1
+WHERE user_name = ? LIMIT 1
 `
 
-func (q *Queries) GetUser(ctx context.Context, userID int32) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUser, userID)
+func (q *Queries) GetUser(ctx context.Context, userName string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUser, userName)
 	var i User
 	err := row.Scan(
 		&i.UserID,
@@ -80,7 +80,7 @@ func (q *Queries) GetUser(ctx context.Context, userID int32) (User, error) {
 const updateUser = `-- name: UpdateUser :exec
 UPDATE user
 SET password=?, first_name=?,last_name=?,dob=?,city=?,state=?
-WHERE user_id = ?
+WHERE user_name = ?
 `
 
 type UpdateUserParams struct {
@@ -90,7 +90,7 @@ type UpdateUserParams struct {
 	Dob       sql.NullString
 	City      sql.NullString
 	State     sql.NullString
-	UserID    int32
+	UserName  string
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
@@ -101,7 +101,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 		arg.Dob,
 		arg.City,
 		arg.State,
-		arg.UserID,
+		arg.UserName,
 	)
 	return err
 }

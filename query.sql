@@ -1,6 +1,6 @@
 -- name: GetUser :one
 SELECT * FROM user
-WHERE user_id = ? LIMIT 1;
+WHERE user_name = ? LIMIT 1;
 
 -- name: CreateUser :execresult
 INSERT INTO user (
@@ -18,9 +18,9 @@ INSERT INTO user (
 -- name: UpdateUser :exec
 UPDATE user
 SET password=?, first_name=?,last_name=?,dob=?,city=?,state=?
-WHERE user_id = ?;
+WHERE user_name = ?;
 
 -- name: DeleteUser :exec
 DELETE FROM user
-WHERE user_id=?;
+WHERE user_name=?;
 
