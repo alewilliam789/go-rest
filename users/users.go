@@ -17,7 +17,7 @@ import (
 type User struct {
   Id int32 `json:"id"`
   UserName string `json:"username"`
-  PassWord []byte `json:"password"`
+  PassWord []byte `json:"password, omitempty"`
   FirstName string `json:"firstname"`
   LastName string `json:"lastname"`
   DOB string `json:"dob"`
@@ -127,7 +127,7 @@ func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if doesExist {
     w.WriteHeader(http.StatusConflict)
-    fmt.Printf("The user with username %s already exists\n", newUser.UserName)
+    log.Printf("The user with username %s already exists\n", newUser.UserName)
     return
   }
 
@@ -159,6 +159,7 @@ func createUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
   }
 
   newUser.Id = int32(new_id)
+  newUser.PassWord = []byte("")
 
   w.WriteHeader(http.StatusCreated)
   w.Header().Set("Content-Type","application/json")
@@ -204,7 +205,7 @@ func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   if !doesExist {
     w.WriteHeader(http.StatusNotFound)
-    fmt.Printf("The user with username %s does not exist\n", currentUser.UserName)
+    log.Printf("The user with username %s does not exist\n", currentUser.UserName)
     return
   }
 
@@ -226,6 +227,8 @@ func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
     return
   }
 
+  currentUser.PassWord = []byte("")
+
   w.WriteHeader(http.StatusAccepted)
   w.Header().Set("Content-Type","application/json")
   encodeErr := encodeUser(&currentUser,w)
@@ -238,6 +241,7 @@ func updateUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Quer
 
   fmt.Printf("The user: %s was updated\n", currentUser.UserName)
 }
+
 
 func getUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
   username := req.PathValue("username")
@@ -258,6 +262,8 @@ func getUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries
 
   currentUser.FromDB(&foundUser)
 
+  currentUser.PassWord = []byte("")
+
   w.WriteHeader(http.StatusFound)
   w.Header().Set("Content-Type", "application/json")
   encodeErr := encodeUser(&currentUser, w)
@@ -269,7 +275,7 @@ func getUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries
   }
 
   fmt.Printf("The user with username %s was got\n", username)
-}
+}  
 
 func deleteUser(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries) {
   username := req.PathValue("username")
