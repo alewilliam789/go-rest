@@ -7,18 +7,19 @@ import (
 	"net/http"
 	"os"
 
+  "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	auth "github.com/alewilliam789/go-rest/auth"
 	users "github.com/alewilliam789/go-rest/users"
-	"github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
-)
+	)
 
-func setupConn() *sql.DB {
+func setupDbConn() *sql.DB {
   cfg := mysql.Config{
     User: os.Getenv("DBUSER"),
     Passwd: os.Getenv("DBPASS"),
     Net: "tcp",
-    Addr: os.Getenv("ADDR"),
+    Addr: os.Getenv("DBADDR"),
     DBName: os.Getenv("DB"),
   }
 
@@ -37,6 +38,17 @@ func setupConn() *sql.DB {
   return db
 }
 
+func setupRedisConn() *redis.Conn {
+  client := redis.NewClient(&redis.Options{
+    Addr: os.Getenv("RSADDR"),
+    Password: os.Getenv("RSPASS"),
+    DB: 0,
+    Protocol: 2,
+  })
+
+  return client.Conn()
+}
+
 
 func main() {
   err := godotenv.Load()
@@ -46,8 +58,11 @@ func main() {
   }
 
 
-  userDb := setupConn()
+  userDb := setupDbConn()
   defer userDb.Close()
+
+  authCache := setupRedisConn()
+  defer authCache.Close()
 
   http.HandleFunc("/login", func(w http.ResponseWriter ,r *http.Request) {
     auth.Login(w, r)
