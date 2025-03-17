@@ -1,7 +1,6 @@
 package users
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -28,7 +27,6 @@ type User struct {
 func (user *User) FromDB(newUser *usersSql.User) {
   user.Id = newUser.UserID
   user.UserName = newUser.UserName
-  user.PassWord = newUser.Password
   user.FirstName = newUser.FirstName.String
   user.LastName = newUser.LastName.String
   user.DOB = newUser.Dob.String
@@ -37,7 +35,7 @@ func (user *User) FromDB(newUser *usersSql.User) {
 }
 
 func (user *User) DeepEqual(otherUser *User) bool {
-  if bytes.Equal(user.PassWord, otherUser.PassWord) && user.UserName == otherUser.UserName && user.FirstName == otherUser.FirstName && user.DOB == otherUser.DOB && user.City == otherUser.City && user.State == otherUser.State {
+  if user.UserName == otherUser.UserName && user.FirstName == otherUser.FirstName && user.DOB == otherUser.DOB && user.City == otherUser.City && user.State == otherUser.State {
     return true
   }
 
