@@ -1,8 +1,8 @@
-package auth 
+package login 
 
 import (
   "testing"
 )
 
-func AuthTest(t *testing.T){
+func LoginTest(t *testing.T){
 }

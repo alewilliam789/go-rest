@@ -1,88 +1,133 @@
-package auth
+package login
 
 import (
+	// "bytes"
 	"bytes"
 	"context"
+	"crypto"
 	"database/sql"
 	"encoding/json"
-	"fmt"
+  "errors"
+	// "fmt"
+	"crypto/rsa"
+	// "crypto/sha256"
 	"log"
 	"net/http"
-  "math/rand"
 
 	usersSql "github.com/alewilliam789/go-rest/db"
 	"github.com/redis/go-redis/v9"
 )
 
+const COOKIE_NAME = "user-cookie"
 
 type LoginAttempt struct {
-  ClientId int `json:"client_id"`
   UserName string `json:"username"`
   Password string `json:"password"`
 }
 
-func generateCode(code []byte) {
-  // 25% chance of stopping
-  const prob = 4
-  const characters = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-._~"  
+func getUserMessage(cookieVal string, client *redis.Client) ([]byte, error) {
+  
+  ctx := context.Background()
 
+  userMessage, redisErr := client.Get(ctx,cookieVal).Result()
 
-  for len(code) < 128 {
-    if len(code) >= 43 {
-      flip := rand.Intn(prob)
-
-      if flip == 0 {
-        return
-      }
-    }
-    
-    randIndex := rand.Intn(len(characters)-1)
-    randByte := byte(characters[randIndex])
-
-    code = append(code,randByte)
+  if redisErr != nil {
+    return []byte(""), redisErr
   }
+  
+  return []byte(userMessage), nil
 }
 
-func authorize(w http.ResponseWriter, req *http.Request, cache *redis.Client, queries *usersSql.Queries) {
 
-    ctx  := context.Background()
+func checkUserCookie(msgBytes []byte, keys *rsa.PrivateKey) error {
 
-    var login_att LoginAttempt
+  verifyErr := rsa.VerifyPKCS1v15(&keys.PublicKey,crypto.SHA256,msgBytes,nil)
+  
+  if verifyErr != nil {
+    return verifyErr
+  }
+
+  return nil
+}
+
+func checkUserCredentials(loginAttempt *LoginAttempt, queries *usersSql.Queries) error {
+  
+  ctx := context.Background()
+
+  foundUser, userNotFoundErr := queries.GetUser(ctx, loginAttempt.UserName)
+
+  if userNotFoundErr != nil {
+    return userNotFoundErr
+  }
+
+  if !bytes.Equal(foundUser.Password, []byte(loginAttempt.Password)) {
+    return errors.New("Mismatching credentials") 
+  }
+
+  return nil
+}
+
+func generateCookie() (*http.Cookie, error) {
+
+  return nil, nil
+}
+
+
+func login(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries, client *redis.Client, key *rsa.PrivateKey) {
+    
+    // Decode request body into login attempt
     decoder := json.NewDecoder(req.Body)
 
-    decodeErr := decoder.Decode(&login_att)
+    var loginAttempt LoginAttempt
+
+    decodeErr := decoder.Decode(&loginAttempt)
 
     if decodeErr != nil {
       w.WriteHeader(http.StatusInternalServerError)
       log.Print("Unable to decode sent JSON")
     }
 
-    found_user, userNotFoundErr := queries.GetUser(ctx, login_att.UserName)
+    // Try to retrieve cookie and check/generate
+    cookie, cookieErr := req.Cookie(COOKIE_NAME)
+  
+    if cookieErr != nil {
+      if verificationErr := checkUserCredentials(&loginAttempt,queries); verificationErr != nil {
+        w.WriteHeader(http.StatusUnauthorized)
+        log.Print("Incorrect User Credentials")
+        return
+      }
+      newCookie, cookieErr := generateCookie()
+      
+      if cookieErr != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+        log.Print("Issue generating cookie")
+        return
+      }
 
-    if userNotFoundErr != nil {
-      w.WriteHeader(http.StatusForbidden)
-      log.Print("Could not find requested user")
+      http.SetCookie(w, newCookie)
+      w.WriteHeader(http.StatusOK)
+      return
+    }
+    
+    _, redisErr := getUserMessage(cookie.Value, client)
+
+    if redisErr != nil {
+      w.WriteHeader(http.StatusInternalServerError)
+      log.Print(redisErr)
+      return
     }
 
-    var access_code []byte;
-
-    generateCode(access_code)
-
-    if bytes.Equal(found_user.Password, []byte(login_att.Password)) {
-      // Will store access_code with client id and send back to generate token    
-    }
-
-    fmt.Printf("Hello %s \n",login_att.UserName)
-
+    // Verify that the correct key was used and send on merry way
+  
     w.WriteHeader(http.StatusOK) 
 }
 
 
-
-func AuthorizeHandler(w http.ResponseWriter, req *http.Request, client *redis.Client, db *sql.DB) {
+func AuthorizeHandler(w http.ResponseWriter, req *http.Request, db *sql.DB, client *redis.Client, keys *rsa.PrivateKey) {
   
   queries := usersSql.New(db)
   
-  // Determine what HTTP METHOD for auth
-
+  if req.Method == "POST" {
+    login(w,req,queries,client,keys)
+  }
 }
