@@ -11,8 +11,6 @@ import (
 	usersSql "github.com/alewilliam789/go-rest/db"
 )
 
-
-
 type User struct {
   Id int32 `json:"id"`
   UserName string `json:"username"`

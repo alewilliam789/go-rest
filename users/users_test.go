@@ -35,7 +35,7 @@ func TestCreateUser(t *testing.T) {
     t.Fatal(marshalErr)
   }
 
-  resp, reqErr := http.Post("http://localhost:8080/user","application/json", bytes.NewBuffer(jimmyBytes))
+  resp, reqErr := http.Post("http://localhost:8080/v1/user","application/json", bytes.NewBuffer(jimmyBytes))
   
   if reqErr != nil {
     t.Fatal(reqErr)
@@ -78,7 +78,7 @@ func TestCreateExistingUser(t *testing.T) {
     t.Fatal(marshalErr)
   }
 
-  resp, reqErr := http.Post("http://localhost:8080/user","application/json", bytes.NewBuffer(jimmyBytes))
+  resp, reqErr := http.Post("http://localhost:8080/v1/user","application/json", bytes.NewBuffer(jimmyBytes))
   
   if reqErr != nil {
     t.Fatal(reqErr)
@@ -108,7 +108,7 @@ func TestUpdateUser(t *testing.T) {
 
   client := &http.Client{}
   
-  req, reqErr := http.NewRequest(http.MethodPut, "http://localhost:8080/user",bytes.NewBuffer(jimmyBytes))
+  req, reqErr := http.NewRequest(http.MethodPut, "http://localhost:8080/v1/user",bytes.NewBuffer(jimmyBytes))
   
   if reqErr != nil {
     t.Fatal(reqErr)
@@ -158,7 +158,7 @@ func TestUpdateMissingUser(t *testing.T) {
 
   client := &http.Client{}
   
-  req, reqErr := http.NewRequest(http.MethodPut, "http://localhost:8080/user",bytes.NewBuffer(jimmyBytes))
+  req, reqErr := http.NewRequest(http.MethodPut, "http://localhost:8080/v1/user",bytes.NewBuffer(jimmyBytes))
   
   if reqErr != nil {
     t.Fatal(reqErr)
@@ -215,7 +215,7 @@ func TestGetUser(t *testing.T) {
 func TestDeleteUser(t *testing.T) {
   client := &http.Client{}
 
-  req, reqErr := http.NewRequest(http.MethodDelete, "http://localhost:8080/user/jimmy789",nil)
+  req, reqErr := http.NewRequest(http.MethodDelete, "http://localhost:8080/v1/user/jimmy789",nil)
   
   if reqErr != nil {
     t.Fatal(reqErr)
