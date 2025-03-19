@@ -1,18 +1,22 @@
 package main
 
 import (
+	"context"
+	"crypto/rsa"
+  "crypto/rand"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-  "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+
 	auth "github.com/alewilliam789/go-rest/auth"
 	users "github.com/alewilliam789/go-rest/users"
-	)
+)
 
 func setupDbConn() *sql.DB {
   cfg := mysql.Config{
@@ -38,7 +42,7 @@ func setupDbConn() *sql.DB {
   return db
 }
 
-func setupRedisConn() *redis.Conn {
+func setupRedisConn() *redis.Client {
   client := redis.NewClient(&redis.Options{
     Addr: os.Getenv("RSADDR"),
     Password: os.Getenv("RSPASS"),
@@ -46,7 +50,26 @@ func setupRedisConn() *redis.Conn {
     Protocol: 2,
   })
 
-  return client.Conn()
+  ctx := context.Background()
+
+  status := client.Ping(ctx)
+
+  if statusErr := status.Err(); statusErr != nil {
+    log.Fatal(statusErr)
+  }
+
+  return client
+}
+
+func generateKeys() *rsa.PrivateKey {
+
+  private_key, keyErr := rsa.GenerateKey(rand.Reader,2048)
+
+  if keyErr != nil {
+    log.Fatal(keyErr)
+  }
+
+  return private_key
 }
 
 
@@ -57,20 +80,22 @@ func main() {
     log.Fatal(err)
   }
 
-
   userDb := setupDbConn()
   defer userDb.Close()
 
-  authCache := setupRedisConn()
-  defer authCache.Close()
+  authClient := setupRedisConn()
+  defer authClient.Close()
 
-  http.HandleFunc("/login", func(w http.ResponseWriter ,r *http.Request) {
-    auth.Login(w, r)
+  // Filler for now while I write more for keys
+  keys := generateKeys()
+
+  http.HandleFunc("/v1/login", func(w http.ResponseWriter ,r *http.Request) {
+    auth.AuthorizeHandler(w, r, userDb, authClient, keys)
   })
-  http.HandleFunc("/user",func(w http.ResponseWriter, r *http.Request) {
+  http.HandleFunc("/v1/user",func(w http.ResponseWriter, r *http.Request) {
     users.UserHandler(w,r,userDb)  
   })
-  http.HandleFunc("/user/{username}", func(w http.ResponseWriter, r *http.Request) {
+  http.HandleFunc("/v1/user/{username}", func(w http.ResponseWriter, r *http.Request) {
     users.UserNameHandler(w,r,userDb)
   })
 
