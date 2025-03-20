@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rsa"
   "crypto/rand"
 	"database/sql"
@@ -9,11 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-
 	"github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
-	"github.com/redis/go-redis/v9"
-
 	auth "github.com/alewilliam789/go-rest/auth"
 	users "github.com/alewilliam789/go-rest/users"
 )
@@ -42,25 +38,6 @@ func setupDbConn() *sql.DB {
   return db
 }
 
-func setupRedisConn() *redis.Client {
-  client := redis.NewClient(&redis.Options{
-    Addr: os.Getenv("RSADDR"),
-    Password: os.Getenv("RSPASS"),
-    DB: 0,
-    Protocol: 2,
-  })
-
-  ctx := context.Background()
-
-  status := client.Ping(ctx)
-
-  if statusErr := status.Err(); statusErr != nil {
-    log.Fatal(statusErr)
-  }
-
-  return client
-}
-
 func generateKeys() *rsa.PrivateKey {
 
   private_key, keyErr := rsa.GenerateKey(rand.Reader,2048)
@@ -83,14 +60,11 @@ func main() {
   userDb := setupDbConn()
   defer userDb.Close()
 
-  authClient := setupRedisConn()
-  defer authClient.Close()
-
   // Filler for now while I write more for keys
   keys := generateKeys()
 
   http.HandleFunc("/v1/login", func(w http.ResponseWriter ,r *http.Request) {
-    auth.AuthorizeHandler(w, r, userDb, authClient, keys)
+    auth.AuthorizeHandler(w, r, userDb, keys)
   })
   http.HandleFunc("/v1/user",func(w http.ResponseWriter, r *http.Request) {
     users.UserHandler(w,r,userDb)  
