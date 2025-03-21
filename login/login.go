@@ -5,7 +5,8 @@ import (
 	"context"
 	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
+  "crypto/sha256"
+	"crypto/sha512"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -24,12 +25,19 @@ const COOKIE_NAME = "user-cookie"
 type LoginAttempt struct {
   UserName string `json:"username"`
   Password string `json:"password"`
+  Hashed []byte `json:"-"`
 }
 
 func hashPass(loginAttempt *LoginAttempt) error {
   hasher := sha256.New()
 
-  loginAttempt.Password = string(hasher.Sum([]byte(loginAttempt.Password)))
+  _, err := hasher.Write([]byte(loginAttempt.Password))
+
+  if err != nil {
+    return err
+  }
+
+  loginAttempt.Hashed = hasher.Sum(nil)
 
   return nil
 }
@@ -44,11 +52,11 @@ func checkUserJWT(jwt string, keys *rsa.PrivateKey) error {
 
   signingString := fmt.Sprintf("%s.%s",jwtSegments[0:0],jwtSegments[1:1])
   
-  hasher := sha256.New()
+  hasher := sha512.New()
 
   hashed := hasher.Sum([]byte(signingString))
 
-  verifyErr := rsa.VerifyPKCS1v15(&keys.PublicKey,crypto.SHA256,hashed,[]byte(jwtSegments[2]))
+  verifyErr := rsa.VerifyPKCS1v15(&keys.PublicKey,crypto.SHA512,hashed,[]byte(jwtSegments[2]))
   
   if verifyErr != nil {
     return verifyErr
@@ -60,6 +68,7 @@ func checkUserJWT(jwt string, keys *rsa.PrivateKey) error {
 func checkUserCredentials(loginAttempt *LoginAttempt, queries *usersSql.Queries) error {
   
   ctx := context.Background()
+  defer ctx.Done()
 
   foundUser, userNotFoundErr := queries.GetUser(ctx, loginAttempt.UserName)
 
@@ -69,10 +78,10 @@ func checkUserCredentials(loginAttempt *LoginAttempt, queries *usersSql.Queries)
 
   hashPass(loginAttempt)
 
-  if !bytes.Equal(foundUser.Password, []byte(loginAttempt.Password)) {
+  if !bytes.Equal(foundUser.Password, loginAttempt.Hashed) {
     return errors.New("Mismatching credentials") 
   }
-
+  
   return nil
 }
 
@@ -87,7 +96,6 @@ func generateCookie(userLogin *LoginAttempt,key *rsa.PrivateKey) (*http.Cookie, 
   if sigErr != nil {
     return nil, sigErr
   }
-  
 
   newCookie := http.Cookie {
     HttpOnly: true,
@@ -125,11 +133,14 @@ func login(w http.ResponseWriter, req *http.Request, queries *usersSql.Queries, 
     cookie, cookieErr := req.Cookie(COOKIE_NAME)
   
     if cookieErr != nil {
-      if verificationErr := checkUserCredentials(&loginAttempt,queries); verificationErr != nil {
+      verificationErr := checkUserCredentials(&loginAttempt,queries)
+      
+      if verificationErr != nil {
         w.WriteHeader(http.StatusUnauthorized)
         log.Print("Incorrect User Credentials")
         return
       }
+
       newCookie, cookieErr := generateCookie(&loginAttempt,key)
       
       if cookieErr != nil {
